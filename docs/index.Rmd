@@ -1,0 +1,561 @@
+---
+title: "**STAT 443 Winter 2024 Project** \n\n\n"
+subtitle: '**Forecasting Johnson & Johnson Stock Prices**'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+fontsize: 12pt
+header-includes:
+- \usepackage{lipsum}
+- \pagenumbering{gobble}
+- \usepackage[labelformat = empty]{caption}
+linkcolor: black
+urlcolor: blue
+geometry: margin=2cm
+---
+
+\begin{center}
+
+\
+
+\
+
+\
+
+\
+
+Group 8
+
+\begin{tabular}{l}
+
+Claudia Chen (j867chen) \textit{resp. for 4.2 smoothing methods, 5.2 general conclusion, slides}\\
+
+Shirley Yang (j584yang) \textit{resp. for 4.1 regression modelling}\\
+
+Xinyi Shen (x77shen) \textit{resp. for 1 problem, 2 plan, 4.3 box-jenkins modelling}\\
+
+Dominic Song (z85song) \textit{resp. for 3 data, 5.1 statistical conclusions}\\
+
+\end{tabular}
+
+\
+
+STAT 443 Forecasting
+
+\
+
+Dr. Reza Ramezan
+
+\
+
+`r format(Sys.Date(), '%B %d, %Y')`
+
+\end{center}
+
+\newpage
+
+```{=latex}
+\setcounter{tocdepth}{3}
+\tableofcontents
+```
+
+\newpage
+
+\pagenumbering{arabic}
+
+```{r, include=FALSE}
+library(knitr)
+library(kableExtra)
+library(forecast)
+library(astsa)
+```
+
+# 1 Problem
+
+## 1.1 Background
+
+In today's dynamic financial landscape, accurately predicting stock prices is critical in the financial industry. The ability to predict market movements not only facilitates informed decision-making but also enables investors to take advantage of emerging opportunities or reduce potential risks. In this context, our project focuses on Johnson & Johnson (JNJ), a multinational company known for its role in the healthcare industry.
+
+## 1.2 Motiviation
+
+The motivation behind the project stems from the inherent complexity and uncertainty associated with financial markets, so investors often tangle what method should be used so that the stock prices can be accurately predicted.
+
+The method of time series analysis and forecasting is advised here to predict stock prices, which is an important tool in the financial industry for predicting stock prices. Since stock prices exhibit various patterns over time, such as trends and seasonality, time series analysis allows us to discover these patterns and model them to make informed predictions about future price movements. Moreover, time series models may also capture and explain the volatility of stock prices, providing insights into price uncertainties.
+
+## 1.3 Problem Statement
+
+The main objective of the project is to develop a robust predictive model for JNJ's share price in one year, i.e., 12 months.
+
+# 2 Plan
+
+The plan of the project is to determine the best-fitted time series model by comparing the proposed models using different methods, including regression, smoothing, and Box-Jenkins, and then use the selected model to predict JNJ's future share price.
+
+# 3 Data
+
+## 3.1 Data Collection and Integrity
+
+The dataset used for this project is JNJ's monthly historical stock prices from January 1985 to March 2024. The dataset was directly downloaded from *Yahoo! Finance* with the following URL: [Johnson & Johnson (JNJ) historical price data](https://ca.finance.yahoo.com/quote/JNJ/history?period1=1425686400&period2=1709769600&interval=1mo&filter=history&frequency=1mo&includeAdjustedClose=true), which is a complete dataset during this time period and free of missing values.
+
+## 3.2 Data Description and Division
+
+By importing the entire dataset of JNJ's monthly historical stock prices from January 1985 to March 2024 and showing the first five rows of the data, it is clear to see the information provided for this stock, including the date, open price, highest price, lowest price, close price, adjusted close price, and volume of each month's first day. We also provide a plot of the entire dataset here. There is an exponential trend during the whole period and a bump in 2021 because JNJ profited from providing COVID-19 vaccines during the pandemic.
+```{r, fig.width=8, fig.height=5, fig.align='center', out.width='80%', echo=FALSE}
+JNJ = read.csv("Data_Group8.csv", header = TRUE)
+kable(head(JNJ, 5), caption = "First Five Rows of JNJ Historical Stock Prices")
+JNJ.ts = ts(JNJ$Adj.Close, start = c(1985, 1), end = c(2024, 3), frequency = 12)
+plot(JNJ.ts, ylab = "JNJ Adjusted Close Stock Prices",
+     main = "Time Series Plot of JNJ Adjusted Close Stock Price
+     from January 1985 to March 2024")
+```
+
+However, this project will only focus on the ten-year (from April 2014 to March 2024) adjusted close stock prices (in USD) of JNJ because recent years' data can provide more informative information for predicting stock prices and can make the variance more constant. Note that the adjusted close price means the closing price after adjustments for all applicable splits and dividend distributions, by definition from *Yahoo! Finance*.
+
+For modelling purposes, we divide the data into training data (from April 2014 to March 2023) and testing data (from April 2023 to March 2024). All models are to be fitted using the training set, and the testing set is only used to check the final model's forecasting power.
+
+Then, we create a time series object based on the ten-year monthly adjusted close prices and give the time series plot of the data with divisions of training and testing datasets.
+```{r, fig.width=8, fig.height=5, fig.align='center', out.width='80%', echo=FALSE}
+JNJ.ts = window(JNJ.ts, start = c(2014, 4), end = c(2024, 3))
+JNJ.train = window(JNJ.ts, start = c(2014, 4), end = c(2023, 3))
+JNJ.test = window(JNJ.ts, start = c(2023, 4), end = c(2024, 3))
+plot(JNJ.ts, ylab = "JNJ Adjusted Close Stock Prices",
+     main = "Time Series Plot of JNJ Adjusted Close Stock Price
+     from April 2014 to March 2024
+     with Training and Testing Dataset Divisions", ylim = c(70, 180))
+lines(JNJ.train, col = "seagreen")
+lines(JNJ.test, col = "dodgerblue")
+abline(v = 2023+3/12, lty = 2)
+legend("topleft", c("Training Set", "Test Set"), col = c("seagreen", "dodgerblue"), lty = 1, bty = "n")
+```
+
+The data shows an increasing trend and potential seasonality with possible expanding variability. Therefore, the data is non-stationary. There are no apparent outliers in the plot.
+
+## 3.3 Possible Solutions
+
+One of the possible solutions to make the data more stationary is doing transformations. Since we observed a fanning-out pattern, we check the stability of variance in the data by conducting a Fligner-Killeen Test to see if transformations are needed, where the null hypothesis is the homogeneity of variances.
+
+```{r, echo=FALSE}
+seg = rep(1:10, each = 12)
+fligner.test(JNJ.ts, seg)
+```
+
+Since the $p$-value of the test is greater than $\alpha = 0.05$, there is no evidence against the null hypothesis at the $0.05$ significance level; the constant variance assumption is not violated. Therefore, there is no need to do any transformations here.
+
+# 4 Analysis
+
+## 4.1 Regression Modelling
+
+### 4.1.1 Model Proposal and Fitness Quality
+
+We first propose the unregularized regression model with only the trend component. By plotting the quadratic loss function versus the degree of the polynomial and the scale-invariant loss function versus the degree of the polynomial, we discover that both MSE and MSI values reach their minimum values at $p=4$.
+
+Then, we propose the regression model with both the trend and seasonality components. By plotting the quadratic loss function versus the degree of the polynomial and the scale-invariant loss function versus the degree of the polynomial, we discover that both MSE and MSI values reach their minimum values at $p=4$ as well. Therefore, adding the seasonality does not help propose a new model.
+
+```{r, echo=FALSE, fig.width=7, fig.height=6.5, fig.align='center', out.width="70%"}
+mse.regression1=msi.regression1=rep(0,15)
+X=poly(time(JNJ.ts),15)
+for (p in 1:15){
+  mod.regression1=lm(JNJ.train ~ X[1:108, 1:p])
+  predict.regression1=cbind(1,X[-(1:108),1:p]) %*% coef(mod.regression1)
+  mse.regression1[p]=mean((JNJ.test - predict.regression1)^2)
+  msi.regression1[p]=mean(1-JNJ.test/predict.regression1)^2
+}
+par(mfrow=c(2,2))
+plot(mse.regression1, pch=16, xlab = "p", ylab = "MSE",
+     main = "Quadratic Loss Function vs. p \n (only considering trend)", cex.main = 0.9)
+points(x = which.min(mse.regression1), y = min(mse.regression1), col = "firebrick3", pch = 19)
+legend("topleft", pch = 19, bty = "n", cex = 0.9, legend = "Minimum MSE", col = "firebrick3")
+plot(msi.regression1, pch=16, xlab = "p", ylab = "MSI",
+     main = "Scale Invariant Loss Function vs. p \n (only considering trend)", cex.main = 0.9)
+points(x = which.min(msi.regression1), y = min(msi.regression1), col = "firebrick3", pch = 19)
+legend("topleft", pch = 19, bty = "n", cex = 0.9, legend = "Minimum MSI", col = "firebrick3")
+mse.regression2=msi.regression2=rep(0,15)
+month=as.factor(cycle(JNJ.train))
+for (p in 1:15){
+  mod.regression2=lm(JNJ.train~X[1:108,1:p]+month)
+  predict.regression2=model.matrix(~X[-(1:108),1:p]+as.factor(cycle(JNJ.test)))%*% coef(mod.regression2)
+  mse.regression2[p]=mean((JNJ.test - predict.regression2)^2)
+  msi.regression2[p]=mean(1-JNJ.test/predict.regression2)^2
+}
+plot(mse.regression2, pch=16, xlab = "p", ylab = "MSE",
+     main = "Quadratic Loss Function vs. p \n (considering both trend and seasonality)", cex.main = 0.9)
+points(x = which.min(mse.regression1), y = min(mse.regression1), col = "firebrick3", pch = 19)
+legend("topleft", pch = 19, bty = "n", cex = 0.9, legend = "Minimum MSE", col = "firebrick3")
+plot(msi.regression2, pch=16, xlab = "p", ylab = "MSI",
+     main = "Scale Invariant Loss Function vs. p\n (considering both trend and seasonality)", cex.main = 0.9)
+points(x = which.min(msi.regression1), y = min(msi.regression1), col = "firebrick3", pch = 19)
+legend("topleft", pch = 19, bty = "n", cex = 0.9, legend = "Minimum MSI", col = "firebrick3")
+```
+
+
+```{r, echo=FALSE}
+mse.msi = data.frame(Regression=c("Only consider the trend","Consider both the trend and seasonality"),
+                     MSE=c(min(mse.regression1),
+                           min(mse.regression2)),
+                     MSI=c(min(msi.regression1),
+                           min(msi.regression2)))
+kable(mse.msi)
+p.best=4
+```
+
+In the end, we choose the unregularized regression model with only the trend component and degree of polynomial equal to 4 since it has a smaller MSE.
+
+### 4.1.2 Model Diagnostics
+
+For the next step, we check if the chosen model satisfies the error term assumptions. 
+
+```{r, fig.width=12, fig.height=6, fig.align='center', out.width='78%', echo=FALSE, results="hide"}
+#Check if the chosen model satisfy the error term assumptions
+mod.regression=lm(JNJ.train~X[1:108,1:p.best])
+
+par(mfrow=c(2,2), cex.main=1.5)
+plot(mod.regression$fitted,mod.regression$residuals,pch=16, col=adjustcolor("black",0.5),
+     xlab="fitted value", ylab="residuals", main = "Residuals vs. Fitted Values")
+abline(h=0,col="red",lty=2,lwd=2)
+
+car::qqPlot(mod.regression$residuals,pch=16,col=adjustcolor("black",0.7),xlab="Theoretical Quantiles (Normal)",ylab="Sample Quantiles", main="Normal QQ Plot")
+
+plot(mod.regression$residuals,pch=16,col=adjustcolor("black",0.5),ylab="residuals", main = "Residuals vs. Time")
+abline(h=0,col="red",lty=2,lwd=2)
+
+acf(mod.regression$residuals,main="ACF Plot of Residuals")
+```
+```{r, echo=FALSE}
+shapiro.test(residuals(mod.regression))
+segment = rep(1:9, each = 12)
+fligner.test(residuals(mod.regression),segment)
+randtests::difference.sign.test(residuals(mod.regression))
+randtests::runs.test(residuals(mod.regression))
+```
+
+From the graphical model diagnostic, we find that there appears to be a pattern in the plot of residuals versus fitted values. The plot of residuals versus time also shows this pattern. We think it may not have the constant mean but have the constant variance. For the qqplot, we can see that all the points are within the blue region, then we can say that it satisfies the normality assumption of residuals. For the ACF plot, we can see that from lag1 to lag4, they all cross the line of 95% confidence interval of 0, so we say it may not satisfy the assumption of independence.
+
+Looking at the formal test, according to the Shapiro-Wilk normality test, we can see that the p-value is significant, and there is no evidence against $H_0$ (the input data has a normal distribution). It satisfies the normality assumption. According to the Fligner-Killeen test of homogeneity of variance, we can see that the p-value is less than 0.05, which is strong evidence against $H_0$ (the data has constant variance). According to the difference signs test, we cannot reject the $H_0$ (the data is random) due to the significant p-value. However, according to the Runs test, we can see that the p-value is less than 0.05, which is strong evidence against $H_0$ (the data is random). Due to the many fluctuations in the data, we believe that the conclusion of the Runs test is more accurate. Thus, we don't think the data is random. 
+
+Therefore, the inference of individual parameters and prediction intervals based on the model is invalid.
+
+### 4.1.3 Prediction Power
+
+By looking at the prediction of test set based on the fitted training set, we observe that the actual values are below the predicted values though the real values still lie in the prediction interval. We need to check the prediction power more precisely by calculating the APSE.
+
+```{r,echo=FALSE, fig.width=8, fig.height=6, fig.align='center', out.width="70%"}
+tim=as.numeric(time(JNJ.train))
+final.regression=lm(JNJ.train~poly(tim,p.best))
+#predict for next 12 months
+new=data.frame(tim=seq(2023+4/12,2024+3/12,by=1/12))
+prediction1=predict(final.regression,new,interval="prediction",level=0.95)
+prediction2=predict(final.regression,new,interval="prediction",level=0.9)
+plot(JNJ.train,xlim=c(2014,2025),ylim=c(50,200), main="Regression Prediction Power")
+abline(v=2023+3/12,lty=2)
+
+lines(JNJ.train,col="seagreen",lwd=2)
+lines(JNJ.test,col="dodgerblue",lwd=2)
+
+lines(new$tim,prediction1[,1],col="red",lty=1,lwd=2)
+lines(new$tim,prediction1[,2],col="grey50",lty=2,lwd=2)
+lines(new$tim,prediction1[,3],col="grey80",lty=2,lwd=2)
+lines(new$tim,prediction2[,2],col="grey80",lty=2,lwd=2)
+lines(new$tim,prediction2[,3],col="grey50",lty=2,lwd=2)
+legend("topleft", lty = 1, bty = "n",
+       c("Training Set", "Test Set", "Prediction",
+         "90% Prediction Interval", "95% Prediction Interval"),
+       col = c("seagreen", "dodgerblue", "red", "grey80", "grey50"))
+```
+```{r,include=FALSE}
+reg.apse = mean((JNJ.test - predict(final.regression, newdata=new))^2); reg.apse
+```
+
+$$
+APSE=MSE_{pred.}=\frac{\sum_{y\in test}(y-\hat y)^2}{n_{test}}=120.5942
+$$
+
+## 4.2 Smoothing Methods
+
+
+
+### 4.2.1 Model Selection
+
+To fit a smoother model, we will apply all combinations of Holt-Winters smoothing methods, including simple exponential smoothing, double exponential smoothing, additive HW and multiplicative HW, to estimate the patterns in the data while ignoring the noise.
+
+After fitting all four smoother models, we selected the double exponential smoothing model as the best since it has the smallest APSE of 45.57445. The parameters are $\hat\alpha = 0.8814822$ and $\hat\beta = 0.002122442$.
+
+```{r,echo=FALSE}
+# simple exponential smoothing
+smoother1 = HoltWinters(JNJ.train, gamma = FALSE, beta = FALSE)
+# double exponential smoothing
+smoother2 = HoltWinters(JNJ.train, gamma = FALSE)
+# additive HW
+smoother3 = HoltWinters(JNJ.train, seasonal = "additive")
+# multiplicative HW
+smoother4 = HoltWinters(JNJ.train, seasonal = "multiplicative")
+HW.predict1 = predict(smoother1, n.ahead = length(JNJ.test))
+APSE1 = mean((JNJ.test - HW.predict1)^2)
+HW.predict2 = predict(smoother2, n.ahead = length(JNJ.test))
+APSE2 = mean((JNJ.test - HW.predict2)^2)
+HW.predict3 = predict(smoother3, n.ahead = length(JNJ.test))
+APSE3 = mean((JNJ.test - HW.predict3)^2)
+HW.predict4 = predict(smoother4, n.ahead = length(JNJ.test))
+APSE4 = mean((JNJ.test - HW.predict4)^2)
+
+HW.final <- HoltWinters(JNJ.train, gamma = FALSE)
+kable(data.frame(APSE1, APSE2, APSE3, APSE4),
+      col.names = c("simple exponential","double exponential","additive HW","multiplicative HW"))
+smoother2
+```
+
+
+### 4.2.2 Model Diagnostics
+
+Now, we check whether the residuals are stationary for the selected model. No apparent trend and seasonality can be identified in the plot of residuals and the ACF. The residual variance increased from 2019 to no more than 5% of the cross 95% confidence interval. However, the pandemic has affected the residuals' variance and has increased it a bit. We can still say the model is almost stationary. This makes the double exponential model an acceptable model for predicting Johnson's stock prices because, besides the prediction power, it also has decent fitting power.
+
+```{r,echo=FALSE, fig.width=12, fig.height=3.9, fig.align='center', out.width='75%'}
+par(mfrow = c(1,2))
+plot(residuals(HW.final), ylab = "Residuals", main = "Double Exponential Model")
+acf(residuals(HW.final),lag.max = 100, main = "ACF Plot of Double Exponential Model")
+```
+
+## 4.3 Box-Jenkins Modelling
+
+### 4.3.1 Model Proposal
+
+First of all, we plot the stock price training data and the ACF and PACF plots of it. The time series plot has an increasing trend with a potential seasonality, and the ACF shows a slow decay, indicating that the original training data is non-stationary because of non-constant mean.
+```{r, fig.width=10, fig.height=2, fig.align='center', out.height='80%', echo=FALSE}
+par(mfrow=c(1, 3), mar=c(4,4,3,3))
+plot(JNJ.train, main = "Time Series Plot of JNJ Training Data")
+acf(JNJ.train, lag.max = 36, main = "ACF Plot of JNJ Training Data")
+pacf(JNJ.train, lag.max = 36, main = "PACF Plot of JNJ Training Data")
+```
+
+**Case 1:** Although the ACF plot does not show seasonality, the time series plot may show the periodicity, so we will still check it. We first start with a seasonal differencing: $\nabla_{12}X_t=(1-B^{12})X_t$.
+```{r, fig.width=10, fig.height=2, fig.align='center', out.height='80%', echo=FALSE}
+diff.JNJ.train.seasonal = diff(JNJ.train, lag = 12)
+par(mfrow=c(1, 3), mar=c(4,4,3,3))
+plot(diff.JNJ.train.seasonal, main = "1 Time Seasonal Differencing (s = 12)")
+acf(diff.JNJ.train.seasonal, lag.max = 36, main = "1 Time Seasonal Differencing (s = 12)")
+pacf(diff.JNJ.train.seasonal, lag.max = 36, main = "1 Time Seasonal Differencing (s = 12)")
+```
+
+Assuming the ACF plot shows an exponential decay, then it has already achieved stationarity. PACF cuts off after lag 2. At this point, $p=2,d=0,q=0,P=0,D=1,Q=0,s=12$, so we can propose an $SARIMA(2,0,0)\times(0,1,0)_{12}$ model.
+
+Assuming the ACF plot shows a slow decay, then it has not achieved stationarity yet. We continue to do a regular differencing following the seasonal differencing: $\nabla\nabla_{12}X_t=(1-B)(1-B^{12})X_t$.
+```{r, fig.width=12, fig.height=6, fig.align='center', out.width='78%', echo=FALSE}
+diff.JNJ.train.seasonal.regular = diff(diff.JNJ.train.seasonal)
+par(mfrow=c(2, 2), cex.main = 1.5)
+plot(diff.JNJ.train.seasonal.regular, main = "Seasonal Differencing followed by Regular Differencing")
+acf(diff.JNJ.train.seasonal.regular, lag.max = 36, main = "Seasonal Differencing followed by Regular Differencing")
+pacf(diff.JNJ.train.seasonal.regular, lag.max = 36, main = "Seasonal Differencing followed by Regular Differencing")
+acf(diff.JNJ.train.seasonal.regular^2, lag.max = 36, main = "(Seasonal Differencing followed by Regular Differencing)^2")
+```
+
+Now, there is no slow decay in the ACF plot, so it achieves stationarity. The squared differencing ACF plot shows that the constant variance assumption is satisfied.
+
+- The ACF plot cuts off after lag $q=1$ or $q=2$.
+- The PACF plot either shows an exponential decay or cuts off after lag $p=1$ or $p=2$.
+- If we do not look at the seasonal lags, then $P=0$ and $Q=0$.
+- If we look at the seasonal lags, then the ACF plot cuts off after lag $Q=1$, and the PACF plot cuts off after $P=1$.
+
+Therefore, we propose models:
+$$
+\begin{aligned}
+&SARIMA(0,1,1)\times(0,1,0)_{12},\ \ SARIMA(1,1,1)\times(0,1,0)_{12},\ \ SARIMA(2,1,1)\times(0,1,0)_{12},\\
+&SARIMA(0,1,1)\times(0,1,1)_{12},\ \ SARIMA(1,1,1)\times(0,1,1)_{12},\ \ SARIMA(2,1,1)\times(0,1,1)_{12}, \\
+&SARIMA(0,1,1)\times(1,1,0)_{12},\ \ SARIMA(1,1,1)\times(1,1,0)_{12},\ \ SARIMA(2,1,1)\times(1,1,0)_{12},\\
+&SARIMA(0,1,1)\times(1,1,1)_{12},\ \ SARIMA(1,1,1)\times(1,1,1)_{12},\ \ SARIMA(2,1,1)\times(1,1,1)_{12}, \\
+&SARIMA(0,1,2)\times(0,1,0)_{12},\ \ SARIMA(1,1,2)\times(0,1,0)_{12},\ \ SARIMA(2,1,2)\times(0,1,0)_{12},\\
+&SARIMA(0,1,2)\times(0,1,1)_{12},\ \ SARIMA(1,1,2)\times(0,1,1)_{12},\ \ SARIMA(2,1,2)\times(0,1,1)_{12},\\
+&SARIMA(0,1,2)\times(1,1,0)_{12},\ \ SARIMA(1,1,2)\times(1,1,0)_{12},\ \ SARIMA(2,1,2)\times(1,1,0)_{12},\\
+&SARIMA(0,1,2)\times(1,1,1)_{12},\ \ SARIMA(1,1,2)\times(1,1,1)_{12},\ \ SARIMA(2,1,2)\times(1,1,1)_{12}.\\
+\end{aligned}
+$$
+
+**Case 2:** Let us also try starting with a regular differencing: $\nabla X_t=(1-B)X_t$.
+```{r, fig.width=12, fig.height=6, fig.align='center', out.width='78%', echo=FALSE}
+diff.JNJ.train.regular = diff(JNJ.train)
+par(mfrow=c(2, 2), cex.main = 1.5)
+plot(diff.JNJ.train.regular, main = "1 Time Regular Differencing")
+acf(diff.JNJ.train.regular, lag.max = 36, main = "1 Time Regular Differencing")
+pacf(diff.JNJ.train.regular, lag.max = 36, main = "1 Time Regular Differencing")
+acf(diff.JNJ.train.regular^2, lag.max = 36, main = "(1 Time Regular Differencing)^2")
+```
+
+It reaches stationarity at this point. The squared differencing ACF plot shows that the constant variance assumption is satisfied. We can propose models by only 1 time regular differencing.
+
+- The ACF plot either shows a damped sine wave or cuts off after lag 1 or 2.
+- The PACF plot either shows an exponential decay or cuts off after lag 1 or 2.
+
+Therefore, we propose models:
+$$
+\begin{aligned}
+&ARIMA(0,1,0), \ \ ARIMA(0,1,1), \ \ ARIMA(0,1,2), \\
+&ARIMA(1,1,0), \ \ ARIMA(1,1,1), \ \ ARIMA(1,1,2), \\
+&ARIMA(2,1,0), \ \ ARIMA(2,1,1), \ \ ARIMA(2,1,2).
+\end{aligned}
+$$
+
+### 4.3.2 Model Diagnostics
+
+In Box-Jenkins Methodology, we check the assumption of $erro\sim WN(0,\sigma^2)$. That is, we check the assumptions on residuals: 1) constant variance, 2) uncorrelated at each lag, 3) normality, and 4) constant zero mean.
+
+```{r, include=FALSE, fig.width=12, fig.height=12}
+# Seasonal Differencing
+BJ.fit1 <- sarima(JNJ.train, p=2, d=0, q=0, P=0, D=1, Q=0, S=12)
+# Seasonal Differencing followed by Regular Differencing
+BJ.fit2 <- sarima(JNJ.train, p=0, d=1, q=1, P=0, D=1, Q=0, S=12)
+BJ.fit3 <- sarima(JNJ.train, p=0, d=1, q=1, P=0, D=1, Q=1, S=12)
+BJ.fit4 <- sarima(JNJ.train, p=0, d=1, q=1, P=1, D=1, Q=0, S=12)
+BJ.fit5 <- sarima(JNJ.train, p=0, d=1, q=1, P=1, D=1, Q=1, S=12)
+BJ.fit6 <- sarima(JNJ.train, p=0, d=1, q=2, P=0, D=1, Q=0, S=12)
+BJ.fit7 <- sarima(JNJ.train, p=0, d=1, q=2, P=0, D=1, Q=1, S=12)
+BJ.fit8 <- sarima(JNJ.train, p=0, d=1, q=2, P=1, D=1, Q=0, S=12)
+BJ.fit9 <- sarima(JNJ.train, p=0, d=1, q=2, P=1, D=1, Q=1, S=12)
+BJ.fit10 <- sarima(JNJ.train, p=1, d=1, q=1, P=0, D=1, Q=0, S=12)
+BJ.fit11 <- sarima(JNJ.train, p=1, d=1, q=1, P=0, D=1, Q=1, S=12)
+BJ.fit12 <- sarima(JNJ.train, p=1, d=1, q=1, P=1, D=1, Q=0, S=12)
+BJ.fit13 <- sarima(JNJ.train, p=1, d=1, q=1, P=1, D=1, Q=1, S=12)
+BJ.fit14 <- sarima(JNJ.train, p=1, d=1, q=2, P=0, D=1, Q=0, S=12)
+BJ.fit15 <- sarima(JNJ.train, p=1, d=1, q=2, P=0, D=1, Q=1, S=12)
+BJ.fit16 <- sarima(JNJ.train, p=1, d=1, q=2, P=1, D=1, Q=0, S=12)
+BJ.fit17 <- sarima(JNJ.train, p=1, d=1, q=2, P=1, D=1, Q=1, S=12)
+BJ.fit18 <- sarima(JNJ.train, p=2, d=1, q=1, P=0, D=1, Q=0, S=12)
+BJ.fit19 <- sarima(JNJ.train, p=2, d=1, q=1, P=0, D=1, Q=1, S=12)
+BJ.fit20 <- sarima(JNJ.train, p=2, d=1, q=1, P=1, D=1, Q=0, S=12)
+BJ.fit21 <- sarima(JNJ.train, p=2, d=1, q=1, P=1, D=1, Q=1, S=12)
+BJ.fit22 <- sarima(JNJ.train, p=2, d=1, q=2, P=0, D=1, Q=0, S=12)
+BJ.fit23 <- sarima(JNJ.train, p=2, d=1, q=2, P=0, D=1, Q=1, S=12) #ok
+BJ.fit24 <- sarima(JNJ.train, p=2, d=1, q=2, P=1, D=1, Q=0, S=12)
+BJ.fit25 <- sarima(JNJ.train, p=2, d=1, q=2, P=1, D=1, Q=1, S=12)
+# Regular Differencing
+BJ.fit26 <- sarima(JNJ.train, p=0, d=1, q=0)
+BJ.fit27 <- sarima(JNJ.train, p=0, d=1, q=1)
+BJ.fit28 <- sarima(JNJ.train, p=0, d=1, q=2) #ok
+BJ.fit29 <- sarima(JNJ.train, p=1, d=1, q=0)
+BJ.fit30 <- sarima(JNJ.train, p=1, d=1, q=1)
+BJ.fit31 <- sarima(JNJ.train, p=1, d=1, q=2)
+BJ.fit32 <- sarima(JNJ.train, p=2, d=1, q=0) #ok
+BJ.fit33 <- sarima(JNJ.train, p=2, d=1, q=1)
+BJ.fit34 <- sarima(JNJ.train, p=2, d=1, q=2) #ok
+```
+
+Fitting all the models by `sarima` function in R, we found that $SARIMA(2,1,2)\times(0,1,1)_{12}$, $ARIMA(0,1,2)$, $ARIMA(2,1,0)$, and $ARIMA(2,1,2)$ passed the residual diagnostics, and others did not pass the residual diagnostics.
+
+Removing the unqualified models, we plot the residual diagnostics of qualified models.
+```{r echo=FALSE, fig.height=4, fig.width=4, message=FALSE, warning=FALSE, out.width='50%', results='hide'}
+par(mfrow = c(2,2), mar = c(1, 0, 1, 0))
+BJ.fit23 = capture.output(sarima(JNJ.train, p=2, d=1, q=2, P=0, D=1, Q=1, S=12, cex = 0.2, cex.main = 0.8))
+BJ.fit23 = sarima(JNJ.train, p=2, d=1, q=2, P=0, D=1, Q=1, S=12, details = F)
+BJ.fit28 = capture.output(sarima(JNJ.train, p=0, d=1, q=2, cex = 0.2, cex.main = 0.8))
+BJ.fit28 = sarima(JNJ.train, p=0, d=1, q=2, details = F)
+BJ.fit32 = capture.output(sarima(JNJ.train, p=2, d=1, q=0, cex = 0.2, cex.main = 0.8))
+BJ.fit32 = sarima(JNJ.train, p=2, d=1, q=0, details = F)
+BJ.fit34 = capture.output(sarima(JNJ.train, p=2, d=1, q=2, cex = 0.2, cex.main = 0.8))
+BJ.fit34 = sarima(JNJ.train, p=2, d=1, q=2, details = F)
+```
+
+### 4.3.3 Model Selection by Fit Quality and Prediction Power
+
+By checking Akaike's Information Criterion (AIC), Akaike's Information Criterion correlated (AICc), and Bayesian Information Criterion (BIC) of the above models that have passed the residual diagnostics, ARIMA(0,1,2) has the smallest BIC value, and ARIMA(2,1,2) has the smallest AIC and AICc values. Overall, there is very little difference between the fit of the models, so we can look at the APSE of all the four models. ARIMA(2,1,0) has the smallest APSE value.
+
+```{r, echo=FALSE, fig.show='hide', warning=FALSE}
+Models = c("SARIMA(2,1,2)×(0,1,1)[12]","ARIMA(0,1,2)","ARIMA(2,1,0)","ARIMA(2,1,2)")
+AIC = c(BJ.fit23$ICs[1],BJ.fit28$ICs[1],BJ.fit32$ICs[1],BJ.fit34$ICs[1])
+AICc = c(BJ.fit23$ICs[2],BJ.fit28$ICs[2],BJ.fit32$ICs[2],BJ.fit34$ICs[2])
+BIC = c(BJ.fit23$ICs[3],BJ.fit28$ICs[3],BJ.fit32$ICs[3],BJ.fit34$ICs[3])
+fore23 = sarima.for(JNJ.train, n.ahead=12, p=2, d=1, q=2, P=0, D=1, Q=1, S=12, pch = 16, cex = 0.9, col=c("seagreen"))
+fore28 = sarima.for(JNJ.train, n.ahead=12, p=0, d=1, q=2, pch = 16, cex = 0.9, col=c("seagreen"))
+fore32 = sarima.for(JNJ.train, n.ahead=12, p=2, d=1, q=0, pch = 16, cex = 0.9, col=c("seagreen"))
+title(main = "ARIMA(2,1,0)", cex.main = 0.9)
+fore34 = sarima.for(JNJ.train, n.ahead=12, p=2, d=1, q=2, pch = 16, cex = 0.9, col=c("seagreen"))
+APSE = c(mean((JNJ.test - fore23$pred)^2),
+         mean((JNJ.test - fore28$pred)^2),
+         mean((JNJ.test - fore32$pred)^2),
+         mean((JNJ.test - fore34$pred)^2))
+BJ.FittedModels.ICs = data.frame(Models, AIC, AICc, BIC, APSE)
+kable(BJ.FittedModels.ICs)
+```
+
+By plotting the forecasting for the test set, we observe that ARIMA(2,1,0) has the best prediction for the test set since the red line is approximately in the middle of the fluctuating blue line.
+
+```{r, echo=FALSE, fig.width=10, fig.height=6, fig.align='center',warning=FALSE}
+# prediction of y in validation set based on the model fitted to training set
+## training set n.ahead 24 is just the validation set
+par(mfrow=c(2,2))
+
+fore23 = sarima.for(JNJ.train, n.ahead=12, p=2, d=1, q=2, P=0, D=1, Q=1, S=12, pch = 16, cex = 0.9, col=c("seagreen"))
+title(main = "SARIMA(2,1,2)×(0,1,1)[12]", cex.main = 0.9)
+lines(JNJ.test, col='dodgerblue', type='b', pch=18)
+legend("topleft", lty = 1, bty = "n",
+       c("Training Set", "Test Set", "Prediction",
+         "90% Prediction Interval", "95% Prediction Interval"),
+       col = c("seagreen", "dodgerblue", "red", "grey80", "grey50"))
+
+fore28 = sarima.for(JNJ.train, n.ahead=12, p=0, d=1, q=2, pch = 16, cex = 0.9, col=c("seagreen"))
+title(main = "ARIMA(0,1,2)", cex.main = 0.9)
+lines(JNJ.test, col='dodgerblue', type='b', pch=18)
+legend("topleft", lty = 1, bty = "n",
+       c("Training Set", "Test Set", "Prediction",
+         "90% Prediction Interval", "95% Prediction Interval"),
+       col = c("seagreen", "dodgerblue", "red", "grey80", "grey50"))
+
+fore32 = sarima.for(JNJ.train, n.ahead=12, p=2, d=1, q=0, pch = 16, cex = 0.9, col=c("seagreen"))
+title(main = "ARIMA(2,1,0)", cex.main = 0.9)
+lines(JNJ.test, col='dodgerblue', type='b', pch=18)
+legend("topleft", lty = 1, bty = "n",
+       c("Training Set", "Test Set", "Prediction",
+         "90% Prediction Interval", "95% Prediction Interval"),
+       col = c("seagreen", "dodgerblue", "red", "grey80", "grey50"))
+
+fore34 = sarima.for(JNJ.train, n.ahead=12, p=2, d=1, q=2, pch = 16, cex = 0.9, col=c("seagreen"))
+title(main = "ARIMA(2,1,2)", cex.main = 0.9)
+lines(JNJ.test, col='dodgerblue', type='b', pch=18)
+legend("topleft", lty = 1, bty = "n",
+       c("Training Set", "Test Set", "Prediction",
+         "90% Prediction Interval", "95% Prediction Interval"),
+       col = c("seagreen", "dodgerblue", "red", "grey80", "grey50"))
+```
+
+We will choose ARIMA(2,1,0) for our Box-Jenkins part as it has the greatest prediction power, and our goal is to forecast stock prices.
+
+# 5 Conclusion
+
+## 5.1 Statistical Conclusions
+
+To summarize,
+
+- the model selected in *4.1 regression modelling* is the 4th-degree unregularized regression model with poor assumption satisfactions and an APSE of 120.5942,
+- the model selected in *4.2 smoothing methods* is the double exponential smoothing model with an APSE of 45.57, and
+- the model selected in *4.3 Box-Jenkins Modelling* is ARIMA(2,1,0) with an APSE of 29.38.
+
+Therefore, ARIMA(2,1,0) also has the minimum APSE among all the model selected using three different time series methods, which is our final model. We refit the final model to the whole data set and predict JNJ's stock price in 12 months.
+
+```{r, fig.width=8, fig.height=4, fig.align='center', out.width='80%', echo=FALSE}
+Final.Model = sarima.for(JNJ.ts, n.ahead=12, p=2, d=1, q=0, pch = 16, cex = 0.9, col=c("seagreen"))
+title(main = "Forecasting JNJ Stock Price in One Year using ARIMA(2,1,0)", cex.main = 0.9)
+lines(JNJ.test, col='dodgerblue', type='b', pch=18)
+legend("topleft", lty = 1, bty = "n",
+       c("Training Set", "Test Set", "Prediction",
+         "90% Prediction Interval", "95% Prediction Interval"),
+       col = c("seagreen", "dodgerblue", "red", "grey80", "grey50"))
+```
+
+## 5.2 General Conclusion
+
+By analyzing the stock price of JNJ over the last ten years, several conclusions can be drawn. Firstly, we can see that the stock price has shown an increasing trend in the past 10 years. It does not exhibit a seasonal pattern, as none of the models we selected included seasonality. Upon analyzing the graph of the stock prices, it is evident that, due to the COVID-19 pandemic, the variance of the stock price increased slightly from 2021 to 2023. However, the variance is not significant enough to dramatically change the pattern of the data, so our prediction remains reliable. After applying the model with the strongest predictive power to make projections, we can conclude that in the next year, the stock price of JNJ is expected to rise to from $159 to around $167 USD.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
