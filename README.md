@@ -284,7 +284,7 @@ first start with a seasonal differencing:
 Assuming the ACF plot shows an exponential decay, then it has already
 achieved stationarity. PACF cuts off after lag 2. At this point,
 *p* = 2, *d* = 0, *q* = 0, *P* = 0, *D* = 1, *Q* = 0, *s* = 12, so we
-can propose an *S**A**R**I**M**A*(2,0,0) × (0,1,0)<sub>12</sub> model.
+can propose an *SARIMA*(2,0,0) × (0,1,0)<sub>12</sub> model.
 
 Assuming the ACF plot shows a slow decay, then it has not achieved
 stationarity yet. We continue to do a regular differencing following the
@@ -304,18 +304,16 @@ variance assumption is satisfied.
     lag *Q* = 1, and the PACF plot cuts off after *P* = 1.
 
 Therefore, we propose models:
-$$
-\begin{aligned}
-&SARIMA(0,1,1)\times(0,1,0)\_{12},\\\\SARIMA(1,1,1)\times(0,1,0)\_{12},\\\\SARIMA(2,1,1)\times(0,1,0)\_{12},\\
-&SARIMA(0,1,1)\times(0,1,1)\_{12},\\\\SARIMA(1,1,1)\times(0,1,1)\_{12},\\\\SARIMA(2,1,1)\times(0,1,1)\_{12}, \\
-&SARIMA(0,1,1)\times(1,1,0)\_{12},\\\\SARIMA(1,1,1)\times(1,1,0)\_{12},\\\\SARIMA(2,1,1)\times(1,1,0)\_{12},\\
-&SARIMA(0,1,1)\times(1,1,1)\_{12},\\\\SARIMA(1,1,1)\times(1,1,1)\_{12},\\\\SARIMA(2,1,1)\times(1,1,1)\_{12}, \\
-&SARIMA(0,1,2)\times(0,1,0)\_{12},\\\\SARIMA(1,1,2)\times(0,1,0)\_{12},\\\\SARIMA(2,1,2)\times(0,1,0)\_{12},\\
-&SARIMA(0,1,2)\times(0,1,1)\_{12},\\\\SARIMA(1,1,2)\times(0,1,1)\_{12},\\\\SARIMA(2,1,2)\times(0,1,1)\_{12},\\
-&SARIMA(0,1,2)\times(1,1,0)\_{12},\\\\SARIMA(1,1,2)\times(1,1,0)\_{12},\\\\SARIMA(2,1,2)\times(1,1,0)\_{12},\\
-&SARIMA(0,1,2)\times(1,1,1)\_{12},\\\\SARIMA(1,1,2)\times(1,1,1)\_{12},\\\\SARIMA(2,1,2)\times(1,1,1)\_{12}.\\
-\end{aligned}
-$$
+
+$$SARIMA(0,1,1)\times(0,1,0)\_{12},\\\\SARIMA(1,1,1)\times(0,1,0)\_{12},\\\\SARIMA(2,1,1)\times(0,1,0)\_{12},$$
+$$SARIMA(0,1,1)\times(0,1,1)\_{12},\\\\SARIMA(1,1,1)\times(0,1,1)\_{12},\\\\SARIMA(2,1,1)\times(0,1,1)\_{12},$$
+$$SARIMA(0,1,1)\times(1,1,0)\_{12},\\\\SARIMA(1,1,1)\times(1,1,0)\_{12},\\\\SARIMA(2,1,1)\times(1,1,0)\_{12},$$
+$$SARIMA(0,1,1)\times(1,1,1)\_{12},\\\\SARIMA(1,1,1)\times(1,1,1)\_{12},\\\\SARIMA(2,1,1)\times(1,1,1)\_{12},$$
+$$SARIMA(0,1,2)\times(0,1,0)\_{12},\\\\SARIMA(1,1,2)\times(0,1,0)\_{12},\\\\SARIMA(2,1,2)\times(0,1,0)\_{12},$$
+$$SARIMA(0,1,2)\times(0,1,1)\_{12},\\\\SARIMA(1,1,2)\times(0,1,1)\_{12},\\\\SARIMA(2,1,2)\times(0,1,1)\_{12},$$
+$$SARIMA(0,1,2)\times(1,1,0)\_{12},\\\\SARIMA(1,1,2)\times(1,1,0)\_{12},\\\\SARIMA(2,1,2)\times(1,1,0)\_{12},$$
+$$SARIMA(0,1,2)\times(1,1,1)\_{12},\\\\SARIMA(1,1,2)\times(1,1,1)\_{12},\\\\SARIMA(2,1,2)\times(1,1,1)\_{12}.$$
+
 
 **Case 2:** Let us also try starting with a regular differencing:
 ∇*X*<sub>*t*</sub> = (1−*B*)*X*<sub>*t*</sub>.
@@ -331,25 +329,21 @@ models by only 1 time regular differencing.
     lag 1 or 2.
 
 Therefore, we propose models:
-$$
-\begin{aligned}
-&ARIMA(0,1,0), \\\\ARIMA(0,1,1), \\\\ARIMA(0,1,2), \\
-&ARIMA(1,1,0), \\\\ARIMA(1,1,1), \\\\ARIMA(1,1,2), \\
-&ARIMA(2,1,0), \\\\ARIMA(2,1,1), \\\\ARIMA(2,1,2).
-\end{aligned}
-$$
+$$ARIMA(0,1,0), \\\\ARIMA(0,1,1), \\\\ARIMA(0,1,2),$$
+$$ARIMA(1,1,0), \\\\ARIMA(1,1,1), \\\\ARIMA(1,1,2),$$
+$$ARIMA(2,1,0), \\\\ARIMA(2,1,1), \\\\ARIMA(2,1,2).$$
 
 ### 4.3.2 Model Diagnostics
 
 In Box-Jenkins Methodology, we check the assumption of
-*e**r**r**o* ∼ *W**N*(0,*σ*<sup>2</sup>). That is, we check the
+*error* ∼ *WN*(0,*σ*<sup>2</sup>). That is, we check the
 assumptions on residuals: 1) constant variance, 2) uncorrelated at each
 lag, 3) normality, and 4) constant zero mean.
 
 Fitting all the models by `sarima` function in R, we found that
-*S**A**R**I**M**A*(2,1,2) × (0,1,1)<sub>12</sub>,
-*A**R**I**M**A*(0,1,2), *A**R**I**M**A*(2,1,0), and
-*A**R**I**M**A*(2,1,2) passed the residual diagnostics, and others did
+*SARIMA*(2,1,2) × (0,1,1)<sub>12</sub>,
+*ARIMA*(0,1,2), *ARIMA*(2,1,0), and
+*ARIMA*(2,1,2) passed the residual diagnostics, and others did
 not pass the residual diagnostics.
 
 Removing the unqualified models, we plot the residual diagnostics of
