@@ -1,4 +1,4 @@
-# 1 Problem
+# 1 The Problem
 
 ## 1.1 Background
 
